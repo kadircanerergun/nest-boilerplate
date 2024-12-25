@@ -1,31 +1,43 @@
-import { BaseAuthProvider } from './base-auth.provider';
+import { AuthProvider } from './auth.provider';
 import * as admin from 'firebase-admin';
 import { initializeApp } from 'firebase/app';
 import { ConfigService } from '@nestjs/config';
 import { RegisterRequestDto, RegisterResponseDto } from '../dto/register.dto';
 import { LoginRequestDto, LoginResponseDto } from '../dto/login.dto';
-import { signInWithEmailAndPassword, getAuth } from 'firebase/auth';
-import firebaseConfig from './firebase.config';
-
-class FirebaseProvider implements BaseAuthProvider {
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { UnauthorizedException } from '@nestjs/common';
+import * as path from 'path';
+import * as fs from 'fs';
+class FirebaseProvider implements AuthProvider {
   firebaseApp: any;
-  constructor(configService: ConfigService) {
+  constructor(private configService: ConfigService) {
     if (admin.apps.length === 0) {
       const adminCredentials = admin.credential.cert(
-        configService.get('FIREBASE_SERVICE_ACCOUNT') as admin.ServiceAccount,
+        configService.getOrThrow(
+          'FIREBASE_SERVICE_ACCOUNT',
+        ) as admin.ServiceAccount,
       );
       admin.initializeApp({
         credential: adminCredentials,
       });
-      this.firebaseApp = initializeApp(firebaseConfig);
+      this.initializeClientApp(configService);
     }
   }
   async login(dto: LoginRequestDto): Promise<LoginResponseDto> {
     const auth = getAuth(this.firebaseApp);
-    const token = signInWithEmailAndPassword(auth, dto.email, dto.password);
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      dto.email,
+      dto.password,
+    ).catch(() => {
+      throw new UnauthorizedException('Invalid credentials');
+    });
+
+    const token = await userCredential.user.getIdTokenResult();
+
     return {
-      access_token: 'token',
-      refresh_token: 'token',
+      access_token: token.token,
+      expires_in: new Date(token.expirationTime).getTime(),
     };
   }
   logout(): Promise<void> {
@@ -37,6 +49,18 @@ class FirebaseProvider implements BaseAuthProvider {
       password: dto.password,
       displayName: dto.name_surname,
     });
+  }
+
+  private initializeClientApp(config: ConfigService) {
+    const configFile = path.resolve(
+      __dirname,
+      config.getOrThrow('FIREBASE_CONFIG_FILE'),
+    );
+    console.log('configFile', configFile);
+    const configContent = fs.readFileSync(configFile, 'utf8');
+    const configData = JSON.parse(configContent);
+
+    this.firebaseApp = initializeApp(configData);
   }
 }
 

@@ -5,7 +5,7 @@ class AccessTokenDto {
   access_token: string;
 
   @ApiProperty()
-  refresh_token: string;
+  expires_in: number;
 }
 
 export { AccessTokenDto };
