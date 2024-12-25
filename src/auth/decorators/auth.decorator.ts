@@ -1,16 +1,16 @@
 import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common';
 
 import { ApiBearerAuth } from '@nestjs/swagger';
-import { FirebaseAuthGuard } from '../guards/firebase-auth.guard';
+import { AuthGuard } from '../guards/auth.guard';
 
 enum UserType {
   USER = 'user',
 }
 export function Auth(...userTypes: UserType[]) {
   return applyDecorators(
-    SetMetadata('auth', true),
+    SetMetadata('auth-protected', true),
     SetMetadata('user_types', userTypes),
-    UseGuards(FirebaseAuthGuard),
+    UseGuards(AuthGuard),
     ApiBearerAuth(),
   );
 }
